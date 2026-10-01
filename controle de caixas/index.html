@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Embalagem e Envio de Caixas</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- Font Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @media print {
+            .no-print {
+                display: none !important;
+            }
+            .print-only {
+                display: block !important;
+            }
+            .page-break {
+                page-break-after: always;
+            }
+            body {
+                background: white !important;
+                color: black !important;
+            }
+            .box-card-print {
+                border: 2px solid #000 !important;
+                break-inside: avoid;
+                margin-bottom: 1.5rem !important;
+            }
+        }
+        .print-only {
+            display: none;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 text-slate-800 min-h-screen flex flex-col">
+
+    <!-- Header Principal (Não Imprime) -->
+    <header class="bg-indigo-700 text-white shadow-lg no-print">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div class="flex items-center space-x-3">
+                <div class="bg-white/10 p-2.5 rounded-xl backdrop-blur-md">
+                    <i data-lucide="package-check" class="w-8 h-8 text-indigo-200"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold tracking-tight">BoxLog - Gestão de Caixas</h1>
+                    <p class="text-xs text-indigo-200">Controle e expedição para transporte interestadual</p>
+                </div>
+            </div>
+            
+            <div class="flex items-center gap-2">
+                <button onclick="exportDataCSV()" class="inline-flex items-center gap-2 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 rounded-lg text-sm font-medium transition shadow-sm border border-indigo-500">
+                    <i data-lucide="download" class="w-4 h-4"></i> Exportar CSV
+                </button>
+                <button onclick="window.print()" class="inline-flex items-center gap-2 px-3.5 py-2 bg-white text-indigo-700 hover:bg-indigo-50 rounded-lg text-sm font-semibold transition shadow-sm">
+                    <i data-lucide="printer" class="w-4 h-4"></i> Imprimir / PDF
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Conteúdo Principal -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-8">
+
+        <!-- RESUMO GERAL / TOTALIZADOR (Sempre visível no topo) -->
+        <section class="bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 transition-all">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-5 border-b border-slate-100 pb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="bar-chart-3" class="w-5 h-5 text-indigo-600"></i>
+                        Resumo Consolidado de Expedição
+                    </h2>
+                    <p class="text-xs text-slate-500">Somatório de todos os itens em todas as caixas registradas</p>
+                </div>
+                <div class="flex items-center gap-3">
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        <i data-lucide="boxes" class="w-4 h-4"></i>
+                        Total de Caixas: <strong id="totalBoxesCount" class="text-sm">0</strong>
+                    </span>
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-100">
+                        <i data-lucide="layers" class="w-4 h-4"></i>
+                        Total de Equipamentos: <strong id="totalItemsCount" class="text-sm">0</strong>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Grid de Totais por Equipamento -->
+            <div id="summaryGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                <!-- Preenchido via JavaScript -->
+            </div>
+        </section>
+
+        <!-- GRID COM DUAS COLUNAS: FORMULÁRIO E LISTA DE CAIXAS (NO-PRINT) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 no-print">
+
+            <!-- Formulário de Cadastro / Edição (4 Colunas) -->
+            <section class="lg:col-span-5 bg-white rounded-2xl shadow-sm border border-slate-200 p-5 sm:p-6 h-fit sticky top-6">
+                <div class="flex items-center justify-between mb-4 pb-3 border-b border-slate-100">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2" id="formTitle">
+                        <i data-lucide="package-plus" class="w-5 h-5 text-indigo-600"></i>
+                        Cadastrar Nova Caixa
+                    </h2>
+                    <button id="cancelEditBtn" onclick="cancelEdit()" class="hidden text-xs text-rose-600 hover:text-rose-700 font-semibold underline">
+                        Cancelar Edição
+                    </button>
+                </div>
+
+                <form id="boxForm" onsubmit="handleFormSubmit(event)" class="space-y-4">
+                    <!-- ID oculto para edição -->
+                    <input type="hidden" id="boxId" value="">
+
+                    <div>
+                        <label for="boxName" class="block text-xs font-semibold text-slate-700 mb-1">Identificação / Nome da Caixa *</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <i data-lucide="tag" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="boxName" required placeholder="Ex: Caixa 1, Caixa TI-SP 02..." 
+                                class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                        </div>
+                    </div>
+
+                    <div>
+                        <label for="boxDestination" class="block text-xs font-semibold text-slate-700 mb-1">Destino / Observação (Opcional)</label>
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                                <i data-lucide="map-pin" class="w-4 h-4"></i>
+                            </span>
+                            <input type="text" id="boxDestination" placeholder="Ex: Filial Rio de Janeiro - Setor RH" 
+                                class="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                        </div>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-100">
+                        <label class="block text-xs font-semibold text-slate-700 mb-2">Adicionar Itens na Caixa</label>
+
+                        <!-- Atalhos Rápidos de Equipamentos Predefinidos -->
+                        <div class="mb-3">
+                            <span class="text-[11px] text-slate-500 block mb-1">Sugestões rápidas:</span>
+                            <div class="flex flex-wrap gap-1.5" id="quickAddButtons">
+                                <!-- Preenchido dinamicamente via JavaScript -->
+                            </div>
+                        </div>
+
+                        <!-- Campos para adicionar item atual -->
+                        <div class="flex items-center gap-2 mb-3">
+                            <div class="flex-1">
+                                <input type="text" id="itemNameInput" placeholder="Nome do Equipamento" 
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition">
+                            </div>
+                            <div class="w-24">
+                                <input type="number" id="itemQtyInput" min="1" value="1" placeholder="Qtd" 
+                                    class="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:bg-white outline-none transition text-center">
+                            </div>
+                            <button type="button" onclick="addItemToCurrentList()" class="p-2 bg-indigo-100 text-indigo-700 hover:bg-indigo-200 rounded-lg transition" title="Adicionar à lista temporária">
+                                <i data-lucide="plus" class="w-5 h-5"></i>
+                            </button>
+                        </div>
+
+                        <!-- Lista Temporária de Itens Adicionados -->
+                        <div class="bg-slate-50 border border-slate-200 rounded-xl p-3 min-h-[120px] max-h-[220px] overflow-y-auto space-y-2" id="tempItemsContainer">
+                            <p class="text-xs text-slate-400 text-center py-6">Nenhum equipamento adicionado ainda.</p>
+                        </div>
+                    </div>
+
+                    <!-- Botão Salvar Caixa -->
+                    <button type="submit" class="w-full py-2.5 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-xl shadow-md hover:shadow-indigo-200 transition flex items-center justify-center gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                        <span id="saveBtnText">Salvar e Registrar Caixa</span>
+                    </button>
+                </form>
+            </section>
+
+            <!-- Lista das Caixas Cadastradas (7 Colunas) -->
+            <section class="lg:col-span-7 space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                    <h2 class="text-lg font-bold text-slate-900 flex items-center gap-2">
+                        <i data-lucide="box" class="w-5 h-5 text-indigo-600"></i>
+                        Caixas Registradas
+                    </h2>
+                    
+                    <div class="flex items-center gap-2">
+                        <!-- Busca rápida -->
+                        <div class="relative">
+                            <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400">
+                                <i data-lucide="search" class="w-3.5 h-3.5"></i>
+                            </span>
+                            <input type="text" id="searchInput" oninput="renderBoxes()" placeholder="Buscar caixa ou item..." 
+                                class="pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-300 rounded-lg text-xs focus:ring-2 focus:ring-indigo-500 outline-none w-44">
+                        </div>
+                        <button onclick="clearAllData()" class="p-2 text-slate-400 hover:text-rose-600 rounded-lg transition" title="Limpar Tudo">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Container dos Cards de Caixas -->
+                <div id="boxesList" class="space-y-4">
+                    <!-- Preenchido via JavaScript -->
+                </div>
+            </section>
+        </div>
+
+        <!-- SEÇÃO EXCLUSIVA PARA IMPRESSÃO (Mostra etiquetas e relatório completo) -->
+        <section class="print-only space-y-8">
+            <div class="border-b-2 border-black pb-4 mb-6">
+                <h1 class="text-3xl font-bold uppercase tracking-wide">Relatório de Expedição de Cargas</h1>
+                <p class="text-sm">Data de emissão: <span id="printDate"></span></p>
+            </div>
+
+            <!-- Resumo para Impressão -->
+            <div class="mb-8">
+                <h2 class="text-xl font-bold mb-3 border-b border-black pb-1">Resumo Total dos Equipamentos</h2>
+                <div id="printSummaryTable" class="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+
+            <!-- Lista Completa de Caixas para Impressão -->
+            <div>
+                <h2 class="text-xl font-bold mb-4 border-b border-black pb-1">Detalhamento por Caixa (Etiquetas)</h2>
+                <div id="printBoxesList" class="grid grid-cols-1 gap-6">
+                    <!-- Preenchido via JS -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <script>
+        // --- EQUIPAMENTOS PREDEFINIDOS PARA SELEÇÃO RÁPIDA ---
+        const PRESET_ITEMS = [
+            "Mouse", "Teclado", "Mousepad", "Desktop", 
+            "Suporte de Desktop", "Fonte", "Cabo de Força", 
+            "HDMI", "Base Completa de Monitor", "Monitor"
+        ];
+
+        // --- ESTADO DA APLICAÇÃO ---
+        let boxes = [];
+        let currentTempItems = []; // Itens sendo adicionados no formulário atual
+
+        // --- INICIALIZAÇÃO ---
+        window.onload = function() {
+            loadBoxesFromStorage();
+            renderQuickAddButtons();
+            renderApp();
+            
+            // Inicializar data para impressão
+            document.getElementById('printDate').innerText = new Date().toLocaleDateString('pt-BR', {
+                day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
+            });
+
+            // Re-renderizar ícones do Lucide
+            lucide.createIcons();
+        };
+
+        // --- LOCAL STORAGE ---
+        function saveBoxesToStorage() {
+            localStorage.setItem('boxlog_boxes', JSON.stringify(boxes));
+        }
+
+        function loadBoxesFromStorage() {
+            const data = localStorage.getItem('boxlog_boxes');
+            if (data) {
+                try {
+                    boxes = JSON.parse(data);
+                } catch (e) {
+                    boxes = [];
+                }
+            } else {
+                // Exemplos iniciais se estiver totalmente vazio
+                boxes = [
+                    {
+                        id: '1',
+                        name: 'Caixa 1',
+                        destination: 'Filial - SP',
+                        createdAt: new Date().toISOString(),
+                        items: [
+                            { name: 'Monitor', qty: 6 },
+                            { name: 'Mouse', qty: 30 }
+                        ]
+                    },
+                    {
+                        id: '2',
+                        name: 'Caixa 2',
+                        destination: 'Filial - SP',
+                        createdAt: new Date().toISOString(),
+                        items: [
+                            { name: 'Teclado', qty: 25 },
+                            { name: 'Cabo de Força', qty: 30 },
+                            { name: 'HDMI', qty: 30 }
+                        ]
+                    }
+                ];
+                saveBoxesToStorage();
+            }
+        }
+
+        // --- RENDERIZAÇÃO DA INTERFACE ---
+        function renderApp() {
+            renderSummary();
+            renderBoxes();
+            renderTempItems();
+            renderPrintView();
+            lucide.createIcons();
+        }
+
+        // Renderiza botões de adição rápida
+        function renderQuickAddButtons() {
+            const container = document.getElementById('quickAddButtons');
+            container.innerHTML = PRESET_ITEMS.map(item => `
+                <button type="button" onclick="selectQuickItem('${item}')" 
+                    class="px-2.5 py-1 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-200 text-slate-600 border border-slate-200 rounded-md text-xs transition font-medium">
+                    + ${item}
+                </button>
+            `).join('');
+        }
+
+        // Quando clica no botão rápido
+        function selectQuickItem(itemName) {
+            document.getElementById('itemNameInput').value = itemName;
+            document.getElementById('itemQtyInput').focus();
+            document.getElementById('itemQtyInput').select();
+        }
+
+        // --- ADICIONAR/REMOVER ITENS TEMPORÁRIOS NA CAIXA EM EDICÃO ---
+        function addItemToCurrentList() {
+            const nameInput = document.getElementById('itemNameInput');
+            const qtyInput = document.getElementById('itemQtyInput');
+
+            const name = nameInput.value.trim();
+            const qty = parseInt(qtyInput.value) || 1;
+
+            if (!name) {
+                alert("Por favor, digite ou escolha o nome do equipamento.");
+                return;
+            }
+
+            // Verificar se o item já existe na lista temporária para apenas somar
+            const existingIndex = currentTempItems.findIndex(i => i.name.toLowerCase() === name.toLowerCase());
+            if (existingIndex >= 0) {
+                currentTempItems[existingIndex].qty += qty;
+            } else {
+                currentTempItems.push({ name, qty });
+            }
+
+            // Reseta campos de input
+            nameInput.value = '';
+            qtyInput.value = '1';
+            nameInput.focus();
+
+            renderTempItems();
+        }
+
+        function removeTempItem(index) {
+            currentTempItems.splice(index, 1);
+            renderTempItems();
+        }
+
+        function renderTempItems() {
+            const container = document.getElementById('tempItemsContainer');
+            if (currentTempItems.length === 0) {
+                container.innerHTML = `<p class="text-xs text-slate-400 text-center py-6">Nenhum equipamento adicionado ainda.</p>`;
+                return;
+            }
+
+            container.innerHTML = currentTempItems.map((item, index) => `
+                <div class="flex items-center justify-between bg-white px-3 py-1.5 rounded-lg border border-slate-200 shadow-sm text-xs">
+                    <span class="font-medium text-slate-800">${item.name}</span>
+                    <div class="flex items-center gap-3">
+                        <span class="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold rounded-md">x${item.qty}</span>
+                        <button type="button" onclick="removeTempItem(${index})" class="text-slate-400 hover:text-rose-600 transition">
+                            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        // --- SALVAR / EDITAR CAIXA ---
+        function handleFormSubmit(e) {
+            e.preventDefault();
+
+            const boxId = document.getElementById('boxId').value;
+            const name = document.getElementById('boxName').value.trim();
+            const destination = document.getElementById('boxDestination').value.trim();
+
+            if (currentTempItems.length === 0) {
+                alert("Adicione pelo menos 1 item na caixa antes de salvar!");
+                return;
+            }
+
+            if (boxId) {
+                // Atualizar caixa existente
+                const index = boxes.findIndex(b => b.id === boxId);
+                if (index !== -1) {
+                    boxes[index].name = name;
+                    boxes[index].destination = destination;
+                    boxes[index].items = [...currentTempItems];
+                }
+            } else {
+                // Criar nova caixa
+                const newBox = {
+                    id: Date.now().toString(),
+                    name: name,
+                    destination: destination,
+                    createdAt: new Date().toISOString(),
+                    items: [...currentTempItems]
+                };
+                boxes.unshift(newBox);
+            }
+
+            saveBoxesToStorage();
+            resetForm();
+            renderApp();
+        }
+
+        function editBox(id) {
+            const box = boxes.find(b => b.id === id);
+            if (!box) return;
+
+            document.getElementById('boxId').value = box.id;
+            document.getElementById('boxName').value = box.name;
+            document.getElementById('boxDestination').value = box.destination || '';
+            currentTempItems = JSON.parse(JSON.stringify(box.items));
+
+            document.getElementById('formTitle').innerHTML = `<i data-lucide="edit-3" class="w-5 h-5 text-amber-600"></i> Editando: ${box.name}`;
+            document.getElementById('saveBtnText').innerText = 'Atualizar Caixa';
+            document.getElementById('cancelEditBtn').classList.remove('hidden');
+
+            renderTempItems();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            lucide.createIcons();
+        }
+
+        function cancelEdit() {
+            resetForm();
+        }
+
+        function resetForm() {
+            document.getElementById('boxId').value = '';
+            document.getElementById('boxForm').reset();
+            currentTempItems = [];
+            document.getElementById('formTitle').innerHTML = `<i data-lucide="package-plus" class="w-5 h-5 text-indigo-600"></i> Cadastrar Nova Caixa`;
+            document.getElementById('saveBtnText').innerText = 'Salvar e Registrar Caixa';
+            document.getElementById('cancelEditBtn').classList.add('hidden');
+            renderTempItems();
+            lucide.createIcons();
+        }
+
+        function deleteBox(id) {
+            if (confirm("Tem certeza que deseja remover esta caixa do registro?")) {
+                boxes = boxes.filter(b => b.id !== id);
+                saveBoxesToStorage();
+                renderApp();
+            }
+        }
+
+        function clearAllData() {
+            if (confirm("ATENÇÃO: Deseja apagar TODAS as caixas e registros do sistema?")) {
+                boxes = [];
+                saveBoxesToStorage();
+                renderApp();
+            }
+        }
+
+        // --- PAINEL CONSOLIDADO / RESUMO ---
+        function calculateTotals() {
+            const itemTotals = {};
+            let totalItemsSum = 0;
+
+            boxes.forEach(box => {
+                box.items.forEach(item => {
+                    const formattedName = item.name.trim();
+                    if (!itemTotals[formattedName]) {
+                        itemTotals[formattedName] = 0;
+                    }
+                    itemTotals[formattedName] += item.qty;
+                    totalItemsSum += item.qty;
+                });
+            });
+
+            return { itemTotals, totalItemsSum, totalBoxes: boxes.length };
+        }
+
+        function renderSummary() {
+            const { itemTotals, totalItemsSum, totalBoxes } = calculateTotals();
+
+            document.getElementById('totalBoxesCount').innerText = totalBoxes;
+            document.getElementById('totalItemsCount').innerText = totalItemsSum;
+
+            const grid = document.getElementById('summaryGrid');
+            const keys = Object.keys(itemTotals);
+
+            if (keys.length === 0) {
+                grid.innerHTML = `<p class="col-span-full text-center text-slate-400 text-sm py-4">Nenhum equipamento registrado nas caixas ainda.</p>`;
+                return;
+            }
+
+            grid.innerHTML = keys.map(itemName => `
+                <div class="bg-slate-50 border border-slate-200 rounded-xl p-3.5 hover:border-indigo-300 transition">
+                    <span class="text-xs text-slate-500 font-medium block truncate" title="${itemName}">${itemName}</span>
+                    <div class="flex items-baseline justify-between mt-1">
+                        <span class="text-xl font-bold text-slate-800">${itemTotals[itemName]}</span>
+                        <span class="text-[10px] text-slate-400 font-semibold uppercase">unid</span>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- LISTAGEM DE CAIXAS ---
+        function renderBoxes() {
+            const container = document.getElementById('boxesList');
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            // Filtragem
+            const filteredBoxes = boxes.filter(box => {
+                const nameMatch = box.name.toLowerCase().includes(searchTerm);
+                const destMatch = (box.destination || '').toLowerCase().includes(searchTerm);
+                const itemMatch = box.items.some(i => i.name.toLowerCase().includes(searchTerm));
+                return nameMatch || destMatch || itemMatch;
+            });
+
+            if (filteredBoxes.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl border border-slate-200 p-8 text-center text-slate-400">
+                        <i data-lucide="package-open" class="w-12 h-12 mx-auto mb-2 text-slate-300"></i>
+                        <p class="font-medium text-slate-600">Nenhuma caixa encontrada</p>
+                        <p class="text-xs text-slate-400 mt-1">Cadastre uma nova caixa ao lado ou refaça a pesquisa.</p>
+                    </div>
+                `;
+                lucide.createIcons();
+                return;
+            }
+
+            container.innerHTML = filteredBoxes.map(box => {
+                const totalItemsInBox = box.items.reduce((acc, curr) => acc + curr.qty, 0);
+
+                return `
+                    <div class="bg-white rounded-2xl border border-slate-200 p-5 shadow-sm hover:shadow-md transition">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <h3 class="font-bold text-slate-900 text-base">${box.name}</h3>
+                                    <span class="px-2 py-0.5 bg-slate-100 text-slate-600 text-xs rounded-full font-medium">
+                                        ${totalItemsInBox} itens
+                                    </span>
+                                </div>
+                                ${box.destination ? `<p class="text-xs text-slate-500 mt-0.5 flex items-center gap-1"><i data-lucide="map-pin" class="w-3 h-3 text-slate-400"></i> ${box.destination}</p>` : ''}
+                            </div>
+
+                            <div class="flex items-center gap-1">
+                                <button onclick="editBox('${box.id}')" class="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition" title="Editar Caixa">
+                                    <i data-lucide="edit-2" class="w-4 h-4"></i>
+                                </button>
+                                <button onclick="deleteBox('${box.id}')" class="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition" title="Excluir Caixa">
+                                    <i data-lucide="trash" class="w-4 h-4"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Lista dos Itens da Caixa -->
+                        <div class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            ${box.items.map(item => `
+                                <div class="flex items-center justify-between bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100 text-xs">
+                                    <span class="text-slate-700 font-medium">${item.name}</span>
+                                    <span class="font-bold text-indigo-700 bg-indigo-50/80 px-2 py-0.5 rounded">${item.qty}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            lucide.createIcons();
+        }
+
+        // --- MODO DE IMPRESSÃO ---
+        function renderPrintView() {
+            const { itemTotals } = calculateTotals();
+            
+            // Tabela resumo para impressão
+            const summaryContainer = document.getElementById('printSummaryTable');
+            summaryContainer.innerHTML = Object.keys(itemTotals).map(key => `
+                <div class="flex justify-between border-b border-gray-200 py-1">
+                    <span class="font-semibold">${key}:</span>
+                    <span>${itemTotals[key]} unid</span>
+                </div>
+            `).join('');
+
+            // Caixas detalhadas para etiquetas/relatório de impressão
+            const boxesContainer = document.getElementById('printBoxesList');
+            boxesContainer.innerHTML = boxes.map(box => `
+                <div class="box-card-print p-4 rounded border border-black">
+                    <div class="flex justify-between items-center border-b border-black pb-2 mb-3">
+                        <h3 class="text-xl font-bold uppercase">${box.name}</h3>
+                        <span class="text-sm font-semibold">${box.destination || 'Sem Destino Definido'}</span>
+                    </div>
+                    <p class="text-xs font-bold mb-2 uppercase">Conteúdo da Caixa:</p>
+                    <div class="grid grid-cols-2 gap-x-4 gap-y-1 text-sm">
+                        ${box.items.map(item => `
+                            <div class="flex justify-between border-b border-gray-100 py-0.5">
+                                <span>- ${item.name}</span>
+                                <span class="font-bold">${item.qty}x</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // --- EXPORTAR DADOS CSV ---
+        function exportDataCSV() {
+            if (boxes.length === 0) {
+                alert("Não há dados registrados para exportar.");
+                return;
+            }
+
+            let csvContent = "data:text/csv;charset=utf-8,Caixa;Destino;Equipamento;Quantidade\n";
+
+            boxes.forEach(box => {
+                box.items.forEach(item => {
+                    const line = `"${box.name}";"${box.destination || ''}";"${item.name}";${item.qty}`;
+                    csvContent += line + "\n";
+                });
+            });
+
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", `controle_caixas_expedicao_${new Date().toISOString().slice(0, 10)}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+    </script>
+</body>
+</html>
